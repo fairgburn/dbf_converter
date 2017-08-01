@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-
+from collections import OrderedDict
 
 # yield all the bytes from the dbf file
 def bytes_from_file(filename, chunksize=8192):
@@ -30,13 +30,13 @@ arr = [ord(b) for b in raw_arr]
 
 # DBF file structure:
 # https://msdn.microsoft.com/en-us/library/aa975386(v=vs.71).aspx
-first_record = arr2i(arr[8:10]) #      ((arr[8]) | (arr[9] << 8)) + 1
-num_records = arr2i(arr[4:8])   #  (arr[7] << (8*3)) | (arr[6] << (8*2)) | (arr[5] << 8) | arr[4]
-record_length = arr2i(arr[10:12])#       (arr[11] << 8) | arr[10]
+first_record = arr2i(arr[8:10])
+num_records = arr2i(arr[4:8])
+record_length = arr2i(arr[10:12])
 
 
 # get the field data (columns)
-fields = dict()
+fields = OrderedDict()
 class Field:
     def __init__(self, name, t, disp, length):
         self.name = name
@@ -66,14 +66,19 @@ cur = first_record
 
 # get records (rows in table)
 # TODO: loop this for each record - num_records
+row = OrderedDict()
 for fname in fields:
-    row = dict()
 
     # the start and end indexes for this field
     start = cur + fields[fname].disp
-    end = start + fields[fname].length + 1 # +1 because of how Python handles array indexes (exclusive for end)
+    end = start + fields[fname].length # +1 because of how Python handles array indexes (exclusive for end)
 
-    # we only use 'C' (text) and 'N' (integer) in the dbfs
-    
-    row[fname] = raw_arr[ start : end ]
-    print(row)
+    # get data from the column as a string
+    row[fname] = ''.join(raw_arr[ start : end ]).strip()
+
+    # if the data is numeric
+    if fields[fname].t == 'N':
+        row[fname] = int(row[fname])
+
+for r in row:
+    print(r, ': ',  row[r])
