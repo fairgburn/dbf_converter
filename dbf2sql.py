@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+
+# using ordered dictionary to maintain column order
 from collections import OrderedDict
 
 # yield all the bytes from the dbf file
@@ -35,8 +37,13 @@ num_records = arr2i(arr[4:8])
 record_length = arr2i(arr[10:12])
 
 
+########################################################################################################
+# Fields
+########################################################################################################
+
 # get the field data (columns)
 fields = OrderedDict()
+
 class Field:
     def __init__(self, name, t, disp, length):
         self.name = name
@@ -49,7 +56,8 @@ class Field:
             .format(self.name, self.t, self.disp, self.length)
 
 
-cur = 32 # the byte we're reading
+# field subrecords (info like field name, length, etc.)
+cur = 32 
 while raw_arr[cur] != '\n':
     name = ''.join(raw_arr[cur:cur+10]).replace(chr(0), '')
     t = raw_arr[cur+11]
@@ -60,25 +68,48 @@ while raw_arr[cur] != '\n':
     cur += 32
 
 # now we have all the fields, the number of records, and the length of each record
+#_______________________________________________________________________________________________________
+
+
+
+########################################################################################################
+# Records
+########################################################################################################
 
 # move the cursor to the first record
 cur = first_record
 
 # get records (rows in table)
-# TODO: loop this for each record - num_records
-row = OrderedDict()
-for fname in fields:
+records = list()
+for i in range(num_records):
+    row = OrderedDict()
+    # store data from each column in the row
+    for fname in fields:
 
-    # the start and end indexes for this field
-    start = cur + fields[fname].disp
-    end = start + fields[fname].length # +1 because of how Python handles array indexes (exclusive for end)
+        # the start and end indexes for this field
+        start = cur + fields[fname].disp
+        end = start + fields[fname].length
 
-    # get data from the column as a string
-    row[fname] = ''.join(raw_arr[ start : end ]).strip()
+        # get data from the column as a string
+        row[fname] = ''.join(raw_arr[ start : end ]).strip()
 
-    # if the data is numeric
-    if fields[fname].t == 'N':
-        row[fname] = int(row[fname])
+        # if the data is numeric
+        if fields[fname].t == 'N':
+            row[fname] = int(row[fname])
 
-for r in row:
-    print(r, ': ',  row[r])
+    # append the row to the list and move the cursor to the next record
+    records.append(row)
+    cur += record_length
+
+# now we have all the record data, ready to generate the SQL
+#_______________________________________________________________________________________________________
+
+
+########################################################################################################
+########################################################################################################
+########################################################################################################
+
+
+########################################################################################################
+# Create table
+########################################################################################################
