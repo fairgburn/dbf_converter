@@ -1,5 +1,16 @@
 #!/usr/bin/python3
 
+
+########################################################################################################
+# Initial setup
+########################################################################################################
+
+import argparse
+
+clargs_p = argparse.ArgumentParser()
+clargs_p.add_argument('FILE', help='the path to the DBF file for conversion')
+clargs = vars(clargs_p.parse_args())
+
 # using ordered dictionary to maintain column order
 from collections import OrderedDict
 
@@ -25,7 +36,7 @@ def arr2i(a):
     return num
 
 # raw data from file
-raw_arr = list(bytes_from_file('sys.dbf'))
+raw_arr = list(bytes_from_file(clargs['FILE']))
 
 # integer values
 arr = [ord(b) for b in raw_arr]
@@ -35,6 +46,8 @@ arr = [ord(b) for b in raw_arr]
 first_record = arr2i(arr[8:10])
 num_records = arr2i(arr[4:8])
 record_length = arr2i(arr[10:12])
+
+#_______________________________________________________________________________________________________
 
 
 ########################################################################################################
@@ -64,6 +77,12 @@ while raw_arr[cur] != '\n':
     disp = arr2i(arr[cur+12:cur+16])
     length = arr[cur+16]
 
+    # some SQL keywords we have to avoid
+    # add more if we find more conflicts
+    kwords = ('group')
+    if name.lower() in kwords:
+        name = "M{}".format(name)
+
     fields[name] = Field(name, t, disp, length)
     cur += 32
 
@@ -83,6 +102,7 @@ cur = first_record
 records = list()
 for i in range(num_records):
     row = OrderedDict()
+
     # store data from each column in the row
     for fname in fields:
 
@@ -108,8 +128,66 @@ for i in range(num_records):
 ########################################################################################################
 ########################################################################################################
 ########################################################################################################
+# SQL stuff
+import configparser
 
+try:
+    import psycopg2
+    import psycopg2.extras
+except:
+    print("couldn't load postgres module... try running `pip install psycopg2`")
+    exit(1)
 
+cfg = configparser.ConfigParser()
+cfg.read('settings.ini')
+database = str(cfg.get('database', 'database'))
+host = str(cfg.get('database', 'host'))
+port = str(cfg.get('database', 'port'))
+user = str(cfg.get('database', 'user'))
+password = str(cfg.get('database', 'password'))
+
+try:
+    conn = psycopg2.connect(database=database, host=host, port=port, user=user, password=password)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+except:
+    print('error connecting to database, check settings.ini')
+    exit(1)
+    
 ########################################################################################################
 # Create table
 ########################################################################################################
+
+
+# table name (from input file)
+table_name = clargs['FILE'].split('.')[0]
+
+# drop the table if it already exists
+sql = "DROP TABLE IF EXISTS {};".format(table_name)
+cur.execute(sql)
+
+# create the table
+sql = "CREATE TABLE {} (".format(table_name)
+for fname in fields:
+    sql += "{} {},".format(fname.lower(), "int" if fields[fname].t == 'N' else "text")
+sql = "{})".format(sql[ 0 : len(sql) - 1 ]) # remove the last comma
+
+cur.execute(sql)
+
+#_______________________________________________________________________________________________________
+
+
+########################################################################################################
+# Insert rows to table
+########################################################################################################
+
+for fname in fields:
+    pass
+
+for row in records:
+    sql = "INSERT INTO {} VALUES(".format(table_name)
+    for fname in row:
+        if row[fname] != '':
+            sql += "{},".format(row[fname])
+    sql += ")"#= "{})".format(sql[ 0 : len(sql) - 1 ]) # remove the last comma
+    print(sql)
+    
