@@ -62,6 +62,9 @@ while raw_arr[cur] != '\n':
 # now we have all the fields, the number of records, and the length of each record
 
 # move the cursor to the first record
-cur = first_record + record_length
-print(raw_arr[cur:cur+record_length])
+cur = first_record
 
+# get records (rows in table)
+rows = dict()
+for fname in fields:
+    pass
