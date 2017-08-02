@@ -184,7 +184,7 @@ except:
 
 
 # table name (from input file)
-table_name = clargs['FILE'].split('.')[0]
+table_name = input('name of new table in database: ')#clargs['FILE'].split('.')[0]
 
 # drop the table if it already exists
 sql = "DROP TABLE IF EXISTS {};".format(table_name)
