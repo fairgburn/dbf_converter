@@ -1,5 +1,14 @@
 #!/usr/bin/python3
 
+######################################################
+#
+# Brandon Fairburn 8/1/2017
+#
+# dbf2sql.py
+#   Converts an old FoxPro file to a PostgreSQL table
+#
+######################################################
+
 
 ########################################################################################################
 # Initial setup
@@ -9,6 +18,7 @@ import argparse
 
 clargs_p = argparse.ArgumentParser()
 clargs_p.add_argument('FILE', help='the path to the DBF file for conversion')
+clargs_p.add_argument('-v', '--verbose', help='show all SQL commands', action='store_true')
 clargs = vars(clargs_p.parse_args())
 
 # using ordered dictionary to maintain column order
@@ -34,6 +44,8 @@ def arr2i(a):
         num = num | (a[i] << (8 * i))
 
     return num
+
+print('working...')
 
 # raw data from file
 raw_arr = list(bytes_from_file(clargs['FILE']))
@@ -78,7 +90,7 @@ while raw_arr[cur] != '\n':
     length = arr[cur+16]
 
     # some SQL keywords we have to avoid
-    # add more if we find more conflicts
+    # add more to kwords if we find more conflicts
     kwords = ('group')
     if name.lower() in kwords:
         name = "M{}".format(name)
@@ -88,7 +100,6 @@ while raw_arr[cur] != '\n':
 
 # now we have all the fields, the number of records, and the length of each record
 #_______________________________________________________________________________________________________
-
 
 
 ########################################################################################################
@@ -129,29 +140,43 @@ for i in range(num_records):
 ########################################################################################################
 ########################################################################################################
 # SQL stuff
+
+# function for executing SQL (to allow verbose mode)
+def sqlexec(c, s):
+    if clargs['verbose']:
+        print(s)
+    c.execute(s)
+
 import configparser
 
 try:
     import psycopg2
-    import psycopg2.extras
+    import psycopg2.extras 
 except:
     print("couldn't load postgres module... try running `pip install psycopg2`")
     exit(1)
 
-cfg = configparser.ConfigParser()
-cfg.read('settings.ini')
-database = str(cfg.get('database', 'database'))
-host = str(cfg.get('database', 'host'))
-port = str(cfg.get('database', 'port'))
-user = str(cfg.get('database', 'user'))
-password = str(cfg.get('database', 'password'))
+# read the settings
+try:
+    cfg = configparser.ConfigParser()
+    cfg.read('settings.ini')
+    database = str(cfg.get('database', 'database'))
+    host = str(cfg.get('database', 'host'))
+    port = str(cfg.get('database', 'port'))
+    user = str(cfg.get('database', 'user'))
+    password = str(cfg.get('database', 'password'))
+except:
+    print('error reading settings.ini')
+    exit(1)
 
+# try to connect to the database
 try:
     conn = psycopg2.connect(database=database, host=host, port=port, user=user, password=password)
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 except:
     print('error connecting to database, check settings.ini')
     exit(1)
+
     
 ########################################################################################################
 # Create table
@@ -163,16 +188,16 @@ table_name = clargs['FILE'].split('.')[0]
 
 # drop the table if it already exists
 sql = "DROP TABLE IF EXISTS {};".format(table_name)
-cur.execute(sql)
+sqlexec(cur, sql)
+
 
 # create the table
 sql = "CREATE TABLE {} (".format(table_name)
 for fname in fields:
     sql += "{} {},".format(fname.lower(), "int" if fields[fname].t == 'N' else "text")
-sql = "{})".format(sql[ 0 : len(sql) - 1 ]) # remove the last comma
+sql = "{});".format(sql[ 0 : len(sql) - 1 ]) # remove the last comma
 
-cur.execute(sql)
-
+sqlexec(cur, sql)
 #_______________________________________________________________________________________________________
 
 
@@ -180,14 +205,23 @@ cur.execute(sql)
 # Insert rows to table
 ########################################################################################################
 
-for fname in fields:
-    pass
-
 for row in records:
     sql = "INSERT INTO {} VALUES(".format(table_name)
     for fname in row:
-        if row[fname] != '':
+        # text data needs 'single quotes' around it, so handle it differently
+        
+        # text data
+        if fields[fname].t == 'C':
+            sql += "'{}',".format(row[fname])
+
+        # numeric data
+        else:
             sql += "{},".format(row[fname])
-    sql += ")"#= "{})".format(sql[ 0 : len(sql) - 1 ]) # remove the last comma
-    print(sql)
     
+    sql = "{});".format(sql[ 0 : len(sql) - 1 ]) # remove the last comma
+    sqlexec(cur, sql)
+#_______________________________________________________________________________________________________
+
+# commit changes and exit
+conn.commit()
+print('done')
