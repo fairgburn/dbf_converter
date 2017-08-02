@@ -153,8 +153,17 @@ try:
     import psycopg2
     import psycopg2.extras 
 except:
-    print("couldn't load postgres module... try running `pip install psycopg2`")
-    exit(1)
+    try:
+        print("couldn't find postgres module, trying to install it now...")
+        import pip
+        pip.main(['install', 'psycopg2'])
+
+        import psycopg2
+        import psycopg2.extras
+    except:
+        print("couldn't load postgres module... try running `pip install psycopg2` with admin rights")
+        print('or run this script again with admin rights')
+        exit(1)
 
 # read the settings
 try:
